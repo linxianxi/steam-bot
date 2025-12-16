@@ -1,9 +1,12 @@
 import puppeteer from "puppeteer";
 import { sendDingTalk, transformHtmlToMd } from "./utils";
+import path from "path";
+import fs from "fs";
 
 async function saveHTMLFiles() {
   const browser = await puppeteer.launch({
     headless: true,
+    args: ["--no-sandbox", "--disable-setuid-sandbox"],
   });
   const page = await browser.newPage();
 
@@ -13,28 +16,33 @@ async function saveHTMLFiles() {
       "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
   });
 
-  // 设置 HTTP Accept-Language 请求头为中文
-  await page.setExtraHTTPHeaders({
-    "Accept-Language": "zh-CN,zh;q=0.9",
-  });
-
   // 设置时区偏移 cookie
-  await page.browserContext().setCookie({
-    name: "timezoneOffset",
-    value: "28800,0", // 示例值
-    domain: "steamcommunity.com",
-    path: "/",
-  });
+  await page.browserContext().setCookie(
+    {
+      name: "timezoneOffset",
+      value: "28800,0", // 示例值
+      domain: "steamcommunity.com",
+      path: "/",
+    },
+    {
+      name: "Steam_Language",
+      value: "schinese",
+      domain: "steamcommunity.com",
+      path: "/",
+    }
+  );
 
   console.log("➡️ 访问起始页面...");
-  await page.goto("https://steamcommunity.com/app/730/allnews/", {
+  await page.goto("https://steamcommunity.com/app/730/allnews", {
     waitUntil: "networkidle2",
   });
 
-  // const nowBeijing = new Date(new Date().getTime() + 8 * 3600 * 1000);
-  // const month = nowBeijing.getMonth() + 1;
-  // const day = nowBeijing.getDate();
-  const targetDate = `12 月 9 日`;
+  const nowBeijing = new Date(new Date().getTime() + 8 * 3600 * 1000);
+  const month = nowBeijing.getMonth() + 1;
+  const day = nowBeijing.getDate();
+  const targetDate = `${month} 月 ${day} 日`;
+
+  console.log("日期", targetDate);
 
   // 1) 获取所有匹配日期的 link
   const links = await page.evaluate((dateText) => {
@@ -43,7 +51,6 @@ async function saveHTMLFiles() {
     cards.forEach((card) => {
       const dateEl = card.querySelector(".apphub_CardContentNewsDate");
       console.log("dateEl", dateEl?.textContent);
-      // console.log(" dateEl.textContent", dateEl.textContent.trim());
       if (dateEl && dateEl.textContent.trim() === dateText) {
         const url = card.getAttribute("data-modal-content-url");
         if (url) urls.push(url);
@@ -53,6 +60,21 @@ async function saveHTMLFiles() {
   }, targetDate);
 
   console.log("匹配到的链接数量：", links.length);
+
+  const jsonPath = path.join(process.cwd(), "sent.json");
+
+  // 读取旧记录
+  let sentData: Record<string, { link: string; html: string }[]> = {};
+  if (fs.existsSync(jsonPath)) {
+    try {
+      sentData = JSON.parse(fs.readFileSync(jsonPath, "utf-8"));
+    } catch {
+      sentData = {};
+    }
+  }
+
+  // 获取今天记录数组
+  const todayList = sentData[targetDate] ?? [];
 
   // 2) 循环访问每个链接并保存 HTML
   let idx = 1;
@@ -65,19 +87,36 @@ async function saveHTMLFiles() {
       await page.waitForSelector(".EventDetailsBody", { timeout: 5000 });
 
       // 获取 outerHTML
-      const htmlFragment = await page.evaluate(() => {
-        const el = document.querySelector(".EventDetailsBody");
-        return el ? el.outerHTML : "";
+      const { title, html } = await page.evaluate(() => {
+        const titleEle = document.querySelector(".EventDetail");
+        const bodyEl = document.querySelector(".EventDetailsBody");
+        return {
+          title:
+            titleEle?.previousElementSibling?.children?.[1]?.textContent ||
+            "通知",
+          html: bodyEl ? bodyEl.outerHTML : "",
+        };
       });
 
-      if (!htmlFragment) {
-        console.warn("⚠️ 未找到 .EventDetailsBody");
+      if (!html) {
+        console.warn("⚠️ 未找到更新内容");
         idx++;
         continue;
       }
 
-      const md = transformHtmlToMd(htmlFragment);
-      sendDingTalk(md);
+      const exists = todayList.find(
+        (item) => item.link === link && item.html === html
+      );
+      if (!exists) {
+        const markdown = transformHtmlToMd(html);
+        // 发送成功再添加 json
+        await sendDingTalk({
+          title,
+          text: markdown,
+          btns: [{ title: "查看详情", actionURL: link }],
+        });
+        todayList.push({ link, html: html });
+      }
     } catch (err: any) {
       console.error("❌ 链接处理失败：", err.message);
     }
@@ -85,6 +124,12 @@ async function saveHTMLFiles() {
   }
 
   await browser.close();
+
+  sentData[targetDate] = todayList;
+
+  fs.writeFileSync(jsonPath, JSON.stringify(sentData, null, 2), "utf-8");
+
+  console.log("📌 sent.json 已更新：", jsonPath);
 }
 
 saveHTMLFiles()

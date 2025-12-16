@@ -4,16 +4,21 @@ name: Puppeteer Steam Scraper
 on:
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   scrape:
     runs-on: ubuntu-latest
 
+    environment: production
+
     steps:
-      # 1) 检出仓库代码
+      # 检出仓库代码
       - name: Checkout code
         uses: actions/checkout@v5
 
-      # 2) 安装 Node.js 20 并启用 Yarn 缓存
+      # 安装 Node.js 20 并启用 Yarn 缓存
       - name: Setup Node.js 20 with Yarn cache
         uses: actions/setup-node@v4
         with:
@@ -22,14 +27,21 @@ jobs:
           # 如果你的 yarn.lock 不在根目录，需要指定 cache-dependency-path
           cache-dependency-path: "yarn.lock"
 
-      # 3) 安装依赖
+      # 安装依赖
       - name: Install dependencies
         run: yarn install --immutable
 
-      # 5) 执行脚本
       - name: Run Puppeteer script
         run: yarn start
+        env:
+          DINGTALK_WEBHOOK_URL: ${{ secrets.DINGTALK_WEBHOOK_URL }}
+          DINGTALK_SECRET: ${{ secrets.DINGTALK_SECRET }}
 
-      # 6) 运行完成
+      - name: Commit sent.json if changed
+        uses: stefanzweifel/git-auto-commit-action@v7
+        with:
+          commit_message: "Update sent.json with latest sent links"
+
+      # 运行完成
       - name: Done
         run: echo "🚀 Puppeteer scraping finished"
