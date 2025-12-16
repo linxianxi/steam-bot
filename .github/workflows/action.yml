@@ -1,0 +1,35 @@
+name: Puppeteer Steam Scraper
+
+# 通过 API 手动触发（外部 cron 等调度器）
+on:
+  workflow_dispatch:
+
+jobs:
+  scrape:
+    runs-on: ubuntu-latest
+
+    steps:
+      # 1) 检出仓库代码
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      # 2) 安装 Node.js 20 并启用 Yarn 缓存
+      - name: Setup Node.js 20 with Yarn cache
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "yarn"
+          # 如果你的 yarn.lock 不在根目录，需要指定 cache-dependency-path
+          cache-dependency-path: "yarn.lock"
+
+      # 3) 安装依赖
+      - name: Install dependencies
+        run: yarn install --immutable
+
+      # 5) 执行脚本
+      - name: Run Puppeteer script
+        run: yarn start
+
+      # 6) 运行完成
+      - name: Done
+        run: echo "🚀 Puppeteer scraping finished"
