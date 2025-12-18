@@ -36,6 +36,8 @@ jobs:
         env:
           DINGTALK_WEBHOOK_URL: ${{ secrets.DINGTALK_WEBHOOK_URL }}
           DINGTALK_SECRET: ${{ secrets.DINGTALK_SECRET }}
+          PUSH_PHONE_URL: ${{ secrets.PUSH_PHONE_URL }}
+          PHONE: ${{ secrets.PHONE }}
 
       - name: Commit sent.json if changed
         uses: stefanzweifel/git-auto-commit-action@v7

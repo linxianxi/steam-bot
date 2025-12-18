@@ -1,5 +1,5 @@
 import puppeteer from "puppeteer";
-import { sendDingTalk, transformHtmlToMd } from "./utils";
+import { callPhone, sendDingTalk, transformHtmlToMd } from "./utils";
 import path from "path";
 import fs from "fs";
 
@@ -75,6 +75,8 @@ async function saveHTMLFiles() {
 
   // 获取今天记录数组
   const todayList = sentData[targetDate] ?? [];
+  // 是否有新闻
+  let hasNews = false;
 
   // 2) 循环访问每个链接并保存 HTML
   let idx = 1;
@@ -108,6 +110,7 @@ async function saveHTMLFiles() {
         (item) => item.link === link && item.html === html
       );
       if (!exists) {
+        hasNews = true;
         const markdown = transformHtmlToMd(html);
         // 发送成功再添加 json
         await sendDingTalk({
@@ -123,13 +126,17 @@ async function saveHTMLFiles() {
     idx++;
   }
 
-  await browser.close();
+  browser.close();
 
-  sentData[targetDate] = todayList;
-
-  fs.writeFileSync(jsonPath, JSON.stringify(sentData, null, 2), "utf-8");
-
-  console.log("📌 sent.json 已更新：", jsonPath);
+  // 如果有新闻，打电话，设置 json
+  if (hasNews) {
+    callPhone();
+    sentData[targetDate] = todayList;
+    fs.writeFileSync(jsonPath, JSON.stringify(sentData, null, 2), "utf-8");
+    console.log("📌 sent.json 已更新：", jsonPath);
+  } else {
+    console.log("⚠️ 未找到新的更新");
+  }
 }
 
 saveHTMLFiles()
