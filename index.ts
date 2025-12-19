@@ -45,19 +45,19 @@ async function saveHTMLFiles() {
   console.log("日期", targetDate);
 
   // 1) 获取所有匹配日期的 link
-  const links = await page.evaluate((dateText) => {
+  const links = await page.evaluate(() => {
     const cards = Array.from(document.querySelectorAll(".apphub_Card"));
     const urls: string[] = [];
     cards.forEach((card) => {
       const dateEl = card.querySelector(".apphub_CardContentNewsDate");
       console.log("dateEl", dateEl?.textContent);
-      if (dateEl && dateEl.textContent.trim() === dateText) {
+      if (dateEl && dateEl.textContent.includes("午")) {
         const url = card.getAttribute("data-modal-content-url");
         if (url) urls.push(url);
       }
     });
     return urls;
-  }, targetDate);
+  });
 
   console.log("匹配到的链接数量：", links.length);
 
