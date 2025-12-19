@@ -1,7 +1,10 @@
 import puppeteer from "puppeteer";
-import { callPhone, sendDingTalk, transformHtmlToMd } from "./utils";
 import path from "path";
 import fs from "fs";
+import { transformHtmlToMd } from "./utils/transformHtmlToMd";
+import { sendDingTalk } from "./utils/sendDingTalk";
+import { callPhone } from "./utils/callPhone";
+import { translator } from "./utils/translator";
 
 async function saveHTMLFiles() {
   const browser = await puppeteer.launch({
@@ -17,7 +20,7 @@ async function saveHTMLFiles() {
   });
 
   // 设置时区偏移 cookie
-  await page.browserContext().setCookie(
+  await browser.setCookie(
     {
       name: "timezoneOffset",
       value: "28800,0", // 示例值
@@ -79,51 +82,52 @@ async function saveHTMLFiles() {
   // 是否有新闻
   let hasNews = false;
 
-  // 2) 循环访问每个链接并保存 HTML
-  let idx = 1;
-  for (const link of links) {
-    try {
-      console.log(`\n➡️ 处理第 ${idx} 个链接：`, link);
-      await page.goto(link, { waitUntil: "networkidle2" });
+  await Promise.all(
+    links.map(async (link, index) => {
+      try {
+        console.log(`\n➡️ 处理第 ${index} 个链接：`, link);
 
-      // 等待 EventDetailsBody 出现（可选：根据页面）
-      await page.waitForSelector(".EventDetailsBody", { timeout: 5000 });
+        const newPage = await browser.newPage();
+        await newPage.goto(link, { waitUntil: "networkidle2" });
+        await newPage.waitForSelector(".EventDetailsBody", { timeout: 5000 });
 
-      // 获取 outerHTML
-      const { title, html } = await page.evaluate(() => {
-        const titleEle = document.querySelector(".EventDetail");
-        const bodyEl = document.querySelector(".EventDetailsBody");
-        return {
-          title:
-            titleEle?.previousElementSibling?.children?.[1]?.textContent ||
-            "通知",
-          html: bodyEl ? bodyEl.outerHTML : "",
-        };
-      });
-
-      if (!html) {
-        console.warn("⚠️ 未找到更新内容");
-        idx++;
-        continue;
-      }
-
-      const exists = todayList.some((item) => item === link);
-      if (!exists) {
-        hasNews = true;
-        const markdown = transformHtmlToMd(html);
-        // 发送成功再添加 json
-        await sendDingTalk({
-          title,
-          text: markdown,
-          btns: [{ title: "查看详情", actionURL: link }],
+        const { title, html } = await newPage.evaluate(() => {
+          const titleEle = document.querySelector(".EventDetail");
+          const bodyEl = document.querySelector(".EventDetailsBody");
+          return {
+            title:
+              titleEle?.previousElementSibling?.children?.[1]?.textContent ||
+              "通知",
+            html: bodyEl ? bodyEl.outerHTML : "",
+          };
         });
-        todayList.push(link);
+
+        await newPage.close();
+
+        if (!html) {
+          console.warn("⚠️ 未找到更新内容");
+          return;
+        }
+
+        const exists = todayList.some((item) => item === link);
+        if (!exists) {
+          hasNews = true;
+          const markdown = transformHtmlToMd(html);
+          const content = await translator(markdown);
+
+          await sendDingTalk({
+            title,
+            text: content,
+            btns: [{ title: "查看详情", actionURL: link }],
+          });
+
+          todayList.push(link);
+        }
+      } catch (err: any) {
+        console.error("❌ 链接处理失败：", err.message);
       }
-    } catch (err: any) {
-      console.error("❌ 链接处理失败：", err.message);
-    }
-    idx++;
-  }
+    })
+  );
 
   browser.close();
 
