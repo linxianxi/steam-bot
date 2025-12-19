@@ -5,6 +5,7 @@ import { transformHtmlToMd } from "./utils/transformHtmlToMd";
 import { sendDingTalk } from "./utils/sendDingTalk";
 import { callPhone } from "./utils/callPhone";
 import { translator } from "./utils/translator";
+import { judgeNotice } from "./utils/judgeNotice";
 
 async function saveHTMLFiles() {
   const browser = await puppeteer.launch({
@@ -81,6 +82,8 @@ async function saveHTMLFiles() {
   const todayList = sentData[targetDate] ?? [];
   // 是否有新闻
   let hasNews = false;
+  // 是否要打电话
+  let shouldCall = false;
 
   await Promise.all(
     links.map(async (link, index) => {
@@ -113,7 +116,14 @@ async function saveHTMLFiles() {
         if (!exists) {
           hasNews = true;
           const markdown = transformHtmlToMd(html);
-          const content = await translator(markdown);
+          const [content, judgeResult] = await Promise.all([
+            translator(markdown),
+            judgeNotice(markdown),
+          ]);
+
+          if (judgeResult) {
+            shouldCall = true;
+          }
 
           await sendDingTalk({
             title,
@@ -133,7 +143,9 @@ async function saveHTMLFiles() {
 
   // 如果有新闻，打电话，设置 json
   if (hasNews) {
-    callPhone();
+    if (shouldCall) {
+      callPhone();
+    }
     sentData[targetDate] = todayList;
     fs.writeFileSync(jsonPath, JSON.stringify(sentData, null, 2), "utf-8");
     console.log("📌 sent.json 已更新：", jsonPath);
