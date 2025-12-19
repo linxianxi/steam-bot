@@ -38,9 +38,10 @@ async function saveHTMLFiles() {
   });
 
   const nowBeijing = new Date(new Date().getTime() + 8 * 3600 * 1000);
+  const year = nowBeijing.getFullYear();
   const month = nowBeijing.getMonth() + 1;
   const day = nowBeijing.getDate();
-  const targetDate = `${month} 月 ${day} 日`;
+  const targetDate = `${year}-${month}-${day}`;
 
   console.log("日期", targetDate);
 
@@ -64,7 +65,7 @@ async function saveHTMLFiles() {
   const jsonPath = path.join(process.cwd(), "sent.json");
 
   // 读取旧记录
-  let sentData: Record<string, { link: string; html: string }[]> = {};
+  let sentData: Record<string, string[]> = {};
   if (fs.existsSync(jsonPath)) {
     try {
       sentData = JSON.parse(fs.readFileSync(jsonPath, "utf-8"));
@@ -106,9 +107,7 @@ async function saveHTMLFiles() {
         continue;
       }
 
-      const exists = todayList.find(
-        (item) => item.link === link && item.html === html
-      );
+      const exists = todayList.some((item) => item === link);
       if (!exists) {
         hasNews = true;
         const markdown = transformHtmlToMd(html);
@@ -118,7 +117,7 @@ async function saveHTMLFiles() {
           text: markdown,
           btns: [{ title: "查看详情", actionURL: link }],
         });
-        todayList.push({ link, html: html });
+        todayList.push(link);
       }
     } catch (err: any) {
       console.error("❌ 链接处理失败：", err.message);
