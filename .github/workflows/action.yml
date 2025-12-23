@@ -39,8 +39,6 @@ jobs:
           PUSH_PHONE_URL: ${{ secrets.PUSH_PHONE_URL }}
           PHONE: ${{ secrets.PHONE }}
           AI_TOKEN: ${{ secrets.AI_TOKEN }}
-          TRANSLATOR_PROMPT: ${{ secrets.TRANSLATOR_PROMPT }}
-          JUDGE_NOTICE_PROMPT: ${{ secrets.JUDGE_NOTICE_PROMPT }}
 
       - name: Commit sent.json if changed
         uses: stefanzweifel/git-auto-commit-action@v7

@@ -1,5 +1,4 @@
 const aiToken = process.env.AI_TOKEN;
-const translatorPrompt = process.env.TRANSLATOR_PROMPT;
 
 export async function translator(content: string) {
   try {
@@ -16,7 +15,10 @@ export async function translator(content: string) {
           messages: [
             {
               role: "system",
-              content: translatorPrompt,
+              content: `你是一个专业的 cs2 游戏内容翻译，可以将发给你的游戏更新公告翻译成中文。
+              提到的所有物品及 cs2 游戏相关专业名词术语等都必须使用官方的中文翻译。
+              如果发给你的内容是中文，你直接返回中文，如果是英文必须按照我的要求的翻译成中文，且必须保持其它 markdown 符号不变。
+              下面是我需要翻译的内容：`,
             },
             {
               role: "user",
@@ -29,7 +31,6 @@ export async function translator(content: string) {
     );
 
     const response = await res.json();
-
     return response.choices[0].message.content;
   } catch (err) {
     console.error("API 调用出错:", err);

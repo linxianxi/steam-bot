@@ -1,5 +1,4 @@
 const aiToken = process.env.AI_TOKEN;
-const judgeNoticePrompt = process.env.JUDGE_NOTICE_PROMPT;
 
 // 判断更新是否有益或有害
 export async function judgeNotice(content: string) {
@@ -17,7 +16,7 @@ export async function judgeNotice(content: string) {
           messages: [
             {
               role: "system",
-              content: judgeNoticePrompt,
+              content: "帮我判断以下 cs2 游戏更新公告是否对商人有益",
             },
             {
               role: "user",
