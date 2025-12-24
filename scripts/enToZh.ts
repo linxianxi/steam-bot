@@ -1,45 +1,72 @@
 import fs from "fs";
 
-const zhUrl =
-  "https://raw.githubusercontent.com/ByMykel/CSGO-API/main/public/api/zh-CN/all.json";
-// 英文 JSON 路径
-const enUrl =
-  "https://raw.githubusercontent.com/ByMykel/CSGO-API/main/public/api/en/all.json";
+const zhBaseUrl =
+  "https://raw.githubusercontent.com/ByMykel/CSGO-API/main/public/api/zh-CN";
+const enBaseUrl =
+  "https://raw.githubusercontent.com/ByMykel/CSGO-API/main/public/api/en";
 
-async function buildEnToZh() {
+const suffixUrls = ["/collections.json"];
+
+async function fetchJson(url: string) {
   try {
-    // 拉取中文/英文 JSON
-    const enResp = await fetch(enUrl);
-    const zhResp = await fetch(zhUrl);
-
-    if (!enResp.ok || !zhResp.ok) {
-      throw new Error("拉取 JSON 失败，请检查网络连通性");
+    const res = await fetch(url);
+    if (!res.ok) {
+      console.warn(`⚠️ 请求失败: ${url} → ${res.status}`);
+      return null;
     }
-
-    const enJson = await enResp.json();
-    const zhJson = await zhResp.json();
-
-    // 生成 {英文名: 中文名} 对照表
-    const enToZh: Record<string, string> = {};
-
-    for (const id of Object.keys(enJson)) {
-      const enItem = enJson[id];
-      const zhItem = zhJson[id];
-
-      // 如果这个 id 在中文里存在
-      if (enItem?.name && zhItem?.name) {
-        enToZh[enItem.name] = zhItem.name;
-      }
-    }
-
-    // 保存到本地文件
-    const outPath = "./en-to-zh.json";
-    fs.writeFileSync(outPath, JSON.stringify(enToZh, null, 2), "utf-8");
-
-    console.log(`生成成功！总计 ${Object.keys(enToZh).length} 条记录`);
-  } catch (err) {
-    console.error("失败：", err);
+    return await res.json();
+  } catch (err: any) {
+    console.warn(`⚠️ 拉取出错: ${url}`, err.message);
+    return null;
   }
 }
 
-buildEnToZh();
+async function buildNameMap() {
+  const result: Record<string, string> = {};
+
+  for (const suffix of suffixUrls) {
+    console.log(`📥 正在请求: ${suffix}`);
+
+    const zhUrl = zhBaseUrl + suffix;
+    const enUrl = enBaseUrl + suffix;
+
+    // 顺序请求
+    const zhData = await fetchJson(zhUrl);
+    console.log(`${suffix} 中文请求结束`);
+    const enData = await fetchJson(enUrl);
+    console.log(`${suffix} 英文请求结束`);
+
+    if (!Array.isArray(zhData) || !Array.isArray(enData)) {
+      console.warn(`⚠️ 数据非法（不是数组）: ${suffix}`);
+      continue;
+    }
+
+    const zhMap: Record<string, string> = {};
+    for (const item of zhData) {
+      zhMap[item.id] = item.name;
+    }
+
+    for (const item of enData) {
+      const zhName = zhMap[item.id];
+      if (zhName) {
+        result[item.name] = zhName;
+      }
+    }
+  }
+
+  return result;
+}
+
+(async () => {
+  try {
+    const map = await buildNameMap();
+    fs.writeFileSync(
+      "./item-name-map.json",
+      JSON.stringify(map, null, 2),
+      "utf-8"
+    );
+    console.log("✅ 完成！item-name-map.json 已生成");
+  } catch (err) {
+    console.error("❌ 错误:", err);
+  }
+})();
