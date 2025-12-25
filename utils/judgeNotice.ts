@@ -1,6 +1,6 @@
 const aiToken = process.env.AI_TOKEN;
 
-// 判断更新是否有益或有害
+// 判断更新是否有益
 export async function judgeNotice(content: string) {
   try {
     const res = await fetch(

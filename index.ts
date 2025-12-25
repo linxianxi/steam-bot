@@ -56,7 +56,7 @@ async function saveHTMLFiles() {
     cards.forEach((card) => {
       const dateEl = card.querySelector(".apphub_CardContentNewsDate");
       console.log("dateEl", dateEl?.textContent);
-      if (dateEl && dateEl.textContent.includes("午")) {
+      if (dateEl?.textContent.includes("午")) {
         const url = card.getAttribute("data-modal-content-url");
         if (url) urls.push(url);
       }
@@ -82,8 +82,8 @@ async function saveHTMLFiles() {
   const todayList = sentData[targetDate] ?? [];
   // 是否有新闻
   let hasNews = false;
-  // 是否要打电话
-  let shouldCall = false;
+  // 是否打过电话
+  let phoneCalled = false;
 
   await Promise.all(
     links.map(async (link, index) => {
@@ -116,14 +116,15 @@ async function saveHTMLFiles() {
         if (!exists) {
           hasNews = true;
           const markdown = transformHtmlToMd(html);
-          const [content, judgeResult] = await Promise.all([
-            translator(markdown),
-            judgeNotice(markdown),
-          ]);
+          const shouldCallPhone = await judgeNotice(markdown);
 
-          if (judgeResult) {
-            shouldCall = true;
+          // 是否应该打电话，没打过再打
+          if (shouldCallPhone && !phoneCalled) {
+            phoneCalled = true;
+            callPhone();
           }
+
+          const content = await translator(markdown);
 
           await sendDingTalk({
             title,
@@ -141,11 +142,8 @@ async function saveHTMLFiles() {
 
   browser.close();
 
-  // 如果有新闻，打电话，设置 json
+  // 如果有新闻，设置 json
   if (hasNews) {
-    if (shouldCall) {
-      callPhone();
-    }
     sentData[targetDate] = todayList;
     fs.writeFileSync(jsonPath, JSON.stringify(sentData, null, 2), "utf-8");
     console.log("📌 sent.json 已更新：", jsonPath);
