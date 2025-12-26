@@ -152,6 +152,11 @@ async function saveHTMLFiles() {
   }
 }
 
-saveHTMLFiles()
-  .then(() => console.log("\n🚀 全部完成！"))
-  .catch((err) => console.error("❌ 脚本运行错误:", err));
+(async () => {
+  try {
+    await saveHTMLFiles();
+    console.log("\n🚀 全部完成！");
+  } catch (err) {
+    console.error("❌ 脚本运行错误:", err);
+  }
+})();
