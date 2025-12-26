@@ -12,13 +12,6 @@ async function saveHTMLFiles() {
     headless: true,
     args: ["--no-sandbox", "--disable-setuid-sandbox"],
   });
-  const page = await browser.newPage();
-
-  await page.setUserAgent({
-    userAgent:
-      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 " +
-      "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-  });
 
   // 设置时区偏移 cookie
   await browser.setCookie(
@@ -36,35 +29,13 @@ async function saveHTMLFiles() {
     }
   );
 
-  console.log("➡️ 访问起始页面...");
-  await page.goto("https://steamcommunity.com/app/730/allnews", {
-    waitUntil: "networkidle2",
-  });
-
-  const nowBeijing = new Date(new Date().getTime() + 8 * 3600 * 1000);
+  const nowBeijing = new Date(Date.now() + 8 * 3600 * 1000);
   const year = nowBeijing.getFullYear();
   const month = nowBeijing.getMonth() + 1;
   const day = nowBeijing.getDate();
   const targetDate = `${year}-${month}-${day}`;
 
   console.log("日期", targetDate);
-
-  // 1) 获取所有匹配日期的 link
-  const links = await page.evaluate(() => {
-    const cards = Array.from(document.querySelectorAll(".apphub_Card"));
-    const urls: string[] = [];
-    cards.forEach((card) => {
-      const dateEl = card.querySelector(".apphub_CardContentNewsDate");
-      console.log("dateEl", dateEl?.textContent);
-      if (dateEl?.textContent.includes("午")) {
-        const url = card.getAttribute("data-modal-content-url");
-        if (url) urls.push(url);
-      }
-    });
-    return urls;
-  });
-
-  console.log("匹配到的链接数量：", links.length);
 
   const jsonPath = path.join(process.cwd(), "sent.json");
 
@@ -85,60 +56,113 @@ async function saveHTMLFiles() {
   // 是否打过电话
   let phoneCalled = false;
 
-  await Promise.all(
-    links.map(async (link, index) => {
-      try {
-        console.log(`\n➡️ 处理第 ${index} 个链接：`, link);
+  async function main(count: number) {
+    const page = await browser.newPage();
 
-        const newPage = await browser.newPage();
-        await newPage.goto(link, { waitUntil: "networkidle2" });
-        await newPage.waitForSelector(".EventDetailsBody", { timeout: 5000 });
+    await page.setUserAgent({
+      userAgent:
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 " +
+        "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+    });
 
-        const { title, html } = await newPage.evaluate(() => {
-          const titleEle = document.querySelector(".EventDetail");
-          const bodyEl = document.querySelector(".EventDetailsBody");
-          return {
-            title:
-              titleEle?.previousElementSibling?.children?.[1]?.textContent ||
-              "通知",
-            html: bodyEl ? bodyEl.outerHTML : "",
-          };
-        });
+    console.log(`➡️ 第 ${count} 次访问起始页面...`);
+    await page.goto("https://steamcommunity.com/app/730/allnews", {
+      waitUntil: "networkidle2",
+    });
 
-        await newPage.close();
-
-        if (!html) {
-          console.warn("⚠️ 未找到更新内容");
-          return;
+    // 1) 获取所有匹配日期的 link
+    const links = await page.evaluate(() => {
+      const cards = Array.from(document.querySelectorAll(".apphub_Card"));
+      const urls: string[] = [];
+      cards.forEach((card) => {
+        const dateEl = card.querySelector(".apphub_CardContentNewsDate");
+        console.log("dateEl", dateEl?.textContent);
+        if (dateEl?.textContent.includes("午")) {
+          const url = card.getAttribute("data-modal-content-url");
+          if (url) urls.push(url);
         }
+      });
+      return urls;
+    });
 
-        const exists = todayList.some((item) => item === link);
-        if (!exists) {
-          hasNews = true;
-          const markdown = transformHtmlToMd(html);
-          const shouldCallPhone = await judgeNotice(markdown);
+    console.log("匹配到的链接数量：", links.length);
 
-          // 是否应该打电话，没打过再打
-          if (shouldCallPhone && !phoneCalled) {
-            phoneCalled = true;
-            callPhone();
-          }
+    await Promise.all(
+      links.map(async (link, index) => {
+        try {
+          console.log(`\n➡️ 处理第 ${index} 个链接：`, link);
 
-          const content = await translator(markdown);
+          const newPage = await browser.newPage();
+          await newPage.goto(link, { waitUntil: "networkidle2" });
+          await newPage.waitForSelector(".EventDetailsBody", { timeout: 5000 });
 
-          await sendDingTalk({
-            title,
-            text: content,
-            btns: [{ title: "查看详情", actionURL: link }],
+          const { title, html } = await newPage.evaluate(() => {
+            const titleEle = document.querySelector(".EventDetail");
+            const bodyEl = document.querySelector(".EventDetailsBody");
+            return {
+              title:
+                titleEle?.previousElementSibling?.children?.[1]?.textContent ||
+                "通知",
+              html: bodyEl ? bodyEl.outerHTML : "",
+            };
           });
 
-          todayList.push(link);
+          newPage.close();
+
+          if (!html) {
+            console.warn("⚠️ 未找到更新内容");
+            return;
+          }
+
+          const exists = todayList.some((item) => item === link);
+          if (!exists) {
+            hasNews = true;
+            todayList.push(link);
+            const markdown = transformHtmlToMd(html);
+            const shouldCallPhone = await judgeNotice(markdown);
+
+            // 是否应该打电话，没打过再打
+            if (shouldCallPhone && !phoneCalled) {
+              phoneCalled = true;
+              callPhone();
+            }
+
+            const content = await translator(markdown);
+
+            sendDingTalk({
+              title,
+              text: content,
+              btns: [{ title: "查看详情", actionURL: link }],
+            });
+          }
+        } catch (err: any) {
+          console.error("❌ 链接处理失败：", err.message);
         }
-      } catch (err: any) {
-        console.error("❌ 链接处理失败：", err.message);
-      }
-    })
+      })
+    );
+  }
+
+  // 执行 3 次
+  const delays = [0, 10000, 20000];
+
+  const runs = delays.map(
+    (delay, index) =>
+      new Promise<void>((resolve) => {
+        const count = index + 1;
+        setTimeout(async () => {
+          try {
+            await main(count);
+            console.log(`✅ 第 ${count} 次执行 main 成功`);
+          } catch (err: any) {
+            console.error(`❌ 第 ${count} 次执行 main 时出错:`, err);
+          }
+          resolve();
+        }, delay);
+      })
   );
+
+  // 等待全部结束
+  await Promise.all(runs);
 
   browser.close();
 
@@ -152,11 +176,10 @@ async function saveHTMLFiles() {
   }
 }
 
-(async () => {
-  try {
-    await saveHTMLFiles();
+saveHTMLFiles()
+  .then(() => {
     console.log("\n🚀 全部完成！");
-  } catch (err) {
+  })
+  .catch((err) => {
     console.error("❌ 脚本运行错误:", err);
-  }
-})();
+  });
