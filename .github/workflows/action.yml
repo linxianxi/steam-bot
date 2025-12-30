@@ -4,9 +4,6 @@ name: Puppeteer Steam Scraper
 on:
   workflow_dispatch:
 
-permissions:
-  contents: write
-
 jobs:
   scrape:
     runs-on: ubuntu-latest
@@ -39,11 +36,8 @@ jobs:
           PUSH_PHONE_URL: ${{ secrets.PUSH_PHONE_URL }}
           PHONE: ${{ secrets.PHONE }}
           AI_TOKEN: ${{ secrets.AI_TOKEN }}
-
-      - name: Commit sent.json if changed
-        uses: stefanzweifel/git-auto-commit-action@v7
-        with:
-          commit_message: "Update sent.json with latest sent links"
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       # 运行完成
       - name: Done

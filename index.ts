@@ -1,11 +1,14 @@
 import puppeteer from "puppeteer";
-import path from "path";
-import fs from "fs";
 import { transformHtmlToMd } from "./utils/transformHtmlToMd";
 import { sendDingTalk } from "./utils/sendDingTalk";
 import { callPhone } from "./utils/callPhone";
 import { translator } from "./utils/translator";
 import { judgeNotice } from "./utils/judgeNotice";
+import { addLink, getRemoteJSON } from "./utils/octokit";
+import fs from "fs";
+import path from "path";
+
+const filePath = path.join(process.cwd(), "sent.json");
 
 async function saveHTMLFiles() {
   const browser = await puppeteer.launch({
@@ -13,46 +16,11 @@ async function saveHTMLFiles() {
     args: ["--no-sandbox", "--disable-setuid-sandbox"],
   });
 
-  // 设置时区偏移 cookie
-  await browser.setCookie(
-    {
-      name: "timezoneOffset",
-      value: "28800,0", // 示例值
-      domain: "steamcommunity.com",
-      path: "/",
-    },
-    {
-      name: "Steam_Language",
-      value: "schinese",
-      domain: "steamcommunity.com",
-      path: "/",
-    }
-  );
+  let localSentData: { link: string; createTime: string }[] = [];
+  try {
+    localSentData = JSON.parse(fs.readFileSync(filePath, "utf8")) || [];
+  } catch (error) {}
 
-  const nowBeijing = new Date(Date.now() + 8 * 3600 * 1000);
-  const year = nowBeijing.getFullYear();
-  const month = nowBeijing.getMonth() + 1;
-  const day = nowBeijing.getDate();
-  const targetDate = `${year}-${month}-${day}`;
-
-  console.log("日期", targetDate);
-
-  const jsonPath = path.join(process.cwd(), "sent.json");
-
-  // 读取旧记录
-  let sentData: Record<string, string[]> = {};
-  if (fs.existsSync(jsonPath)) {
-    try {
-      sentData = JSON.parse(fs.readFileSync(jsonPath, "utf-8"));
-    } catch {
-      sentData = {};
-    }
-  }
-
-  // 获取今天记录数组
-  const todayList = sentData[targetDate] ?? [];
-  // 是否有新闻
-  let hasNews = false;
   // 是否打过电话
   let phoneCalled = false;
 
@@ -65,27 +33,53 @@ async function saveHTMLFiles() {
         "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
     });
 
+    // 设置时区偏移 cookie
+    await page.browserContext().setCookie(
+      {
+        name: "timezoneOffset",
+        value: "28800,0", // 示例值
+        domain: "steamcommunity.com",
+        path: "/",
+      },
+      {
+        name: "Steam_Language",
+        value: "schinese",
+        domain: "steamcommunity.com",
+        path: "/",
+      }
+    );
+
     console.log(`➡️ 第 ${count} 次访问起始页面...`);
     await page.goto("https://steamcommunity.com/app/730/allnews", {
       waitUntil: "networkidle2",
     });
 
     // 1) 获取所有匹配日期的 link
-    const links = await page.evaluate(() => {
+    let links = await page.evaluate((localSentData) => {
       const cards = Array.from(document.querySelectorAll(".apphub_Card"));
       const urls: string[] = [];
       cards.forEach((card) => {
         const dateEl = card.querySelector(".apphub_CardContentNewsDate");
-        console.log("dateEl", dateEl?.textContent);
         if (dateEl?.textContent.includes("午")) {
           const url = card.getAttribute("data-modal-content-url");
-          if (url) urls.push(url);
+          if (url && !localSentData.some((i) => i.link === url)) {
+            urls.push(url);
+          }
         }
       });
       return urls;
-    });
+    }, localSentData);
 
     console.log("匹配到的链接数量：", links.length);
+
+    if (links.length) {
+      const remoteLinks = (await getRemoteJSON()).map((i) => i.link);
+      // 过滤出不在 remoteLinks 中的 link
+      links = links.filter((link) => !remoteLinks.includes(link));
+      console.log("新链接数量：", links.length);
+    }
+
+    const shouldSaveLinks: string[] = [];
 
     await Promise.all(
       links.map(async (link, index) => {
@@ -113,11 +107,11 @@ async function saveHTMLFiles() {
             console.warn("⚠️ 未找到更新内容");
             return;
           }
+          const remoteData = await getRemoteJSON();
 
-          const exists = todayList.some((item) => item === link);
+          // 再从最新的数据库中检查是否存在
+          const exists = remoteData.some((i) => i.link === link);
           if (!exists) {
-            hasNews = true;
-            todayList.push(link);
             const markdown = transformHtmlToMd(html);
             const shouldCallPhone = await judgeNotice(markdown);
 
@@ -129,51 +123,52 @@ async function saveHTMLFiles() {
 
             const content = await translator(markdown);
 
-            sendDingTalk({
+            await sendDingTalk({
               title,
               text: content,
               btns: [{ title: "查看详情", actionURL: link }],
             });
+
+            shouldSaveLinks.push(link);
           }
-        } catch (err: any) {
-          console.error("❌ 链接处理失败：", err.message);
+        } catch (error) {
+          console.error("❌ 链接处理失败：", error);
         }
       })
     );
+
+    if (shouldSaveLinks.length) {
+      const remoteData = await getRemoteJSON();
+      const newLinkData = shouldSaveLinks.map((link) => ({
+        link,
+        createTime: new Date(
+          // +8 小时
+          Date.now() + 28800000
+        ).toLocaleString(),
+      }));
+      await addLink(JSON.stringify([...newLinkData, ...remoteData], null, 2));
+      localSentData.push(...newLinkData);
+    }
   }
 
-  // 执行 3 次
-  const delays = [0, 10000, 20000];
+  const n = 10; // 执行次数
+  for (let i = 0; i < n; i++) {
+    try {
+      await main(i + 1);
+      console.log(`✅ 第 ${i + 1} 次 main 执行完成`);
+    } catch (error) {
+      console.error("❌ main 执行错误:", error);
+    }
 
-  const runs = delays.map(
-    (delay, index) =>
-      new Promise<void>((resolve) => {
-        const count = index + 1;
-        setTimeout(async () => {
-          try {
-            await main(count);
-            console.log(`✅ 第 ${count} 次执行 main 成功`);
-          } catch (err: any) {
-            console.error(`❌ 第 ${count} 次执行 main 时出错:`, err);
-          }
-          resolve();
-        }, delay);
-      })
-  );
-
-  // 等待全部结束
-  await Promise.all(runs);
+    if (i < n - 1) {
+      // 间隔 5 秒
+      await new Promise((resolve) => {
+        setTimeout(resolve, 5000);
+      });
+    }
+  }
 
   browser.close();
-
-  // 如果有新闻，设置 json
-  if (hasNews) {
-    sentData[targetDate] = todayList;
-    fs.writeFileSync(jsonPath, JSON.stringify(sentData, null, 2), "utf-8");
-    console.log("📌 sent.json 已更新：", jsonPath);
-  } else {
-    console.log("⚠️ 未找到新的更新");
-  }
 }
 
 saveHTMLFiles()

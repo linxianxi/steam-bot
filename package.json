@@ -5,13 +5,15 @@
   "type": "module",
   "scripts": {
     "start": "tsx ./index.ts",
-    "build-en-to-zh": "tsx ./scripts/enToZh.ts"
+    "build-en-to-zh": "tsx ./scripts/enToZh.ts",
+    "octokit": "tsx ./utils/octokit.ts"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "description": "",
   "dependencies": {
+    "octokit": "^5.0.5",
     "puppeteer": "^24.33.0",
     "turndown": "^7.2.2"
   },
