@@ -36,7 +36,6 @@ jobs:
           PUSH_PHONE_URL: ${{ secrets.PUSH_PHONE_URL }}
           PHONE: ${{ secrets.PHONE }}
           AI_TOKEN: ${{ secrets.AI_TOKEN }}
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       # 运行完成
