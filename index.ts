@@ -7,6 +7,10 @@ import { judgeNotice } from "./utils/judgeNotice";
 import { addLink, getRemoteJSON } from "./utils/octokit";
 import fs from "fs";
 import path from "path";
+import { getBeijingDate, getBeijingDateTime } from "./utils/date";
+
+// 必须打电话的日期
+const mustCallPhoneDates = ["2026/1/8"];
 
 const filePath = path.join(process.cwd(), "sent.json");
 
@@ -113,7 +117,11 @@ async function saveHTMLFiles() {
           const exists = remoteData.some((i) => i.link === link);
           if (!exists) {
             const markdown = transformHtmlToMd(html);
-            const shouldCallPhone = await judgeNotice(markdown);
+            const shouldCallPhone = mustCallPhoneDates.includes(
+              getBeijingDate()
+            )
+              ? true
+              : await judgeNotice(markdown);
 
             // 是否应该打电话，没打过再打
             if (shouldCallPhone && !phoneCalled) {
@@ -141,10 +149,7 @@ async function saveHTMLFiles() {
       const remoteData = await getRemoteJSON();
       const newLinkData = shouldSaveLinks.map((link) => ({
         link,
-        createTime: new Date(
-          // +8 小时
-          Date.now() + 28800000
-        ).toLocaleString(),
+        createTime: getBeijingDateTime(),
       }));
       await addLink(JSON.stringify([...newLinkData, ...remoteData], null, 2));
       localSentData.push(...newLinkData);
