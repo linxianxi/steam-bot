@@ -20,7 +20,8 @@ export async function judgeNotice(content: string) {
               你需要从游戏的更新公告中判断中是否有利益获取，例如以下几点是有利益获取的：
               1.箱子、收藏品、饰品、道具等即将下架、立即下架、最后获取机会等，可以马上购买大量这些绝版道具获利
               2.修复了某些饰品的外观问题，也可以马上购买。
-              除去以上列出的这几点，你应该自行根据游戏更新公告判断是否有利益可以获取。下面是游戏更新公告内容：`,
+              3.除了利好消息，也要判断是否有利空消息
+              除去以上列出的这几点，你应该自行根据游戏更新公告判断是否有利好或利空。下面是游戏更新公告内容：`,
             },
             {
               role: "user",
@@ -44,7 +45,7 @@ export async function judgeNotice(content: string) {
           },
           temperature: 0,
         }),
-      }
+      },
     );
 
     const response = await res.json();

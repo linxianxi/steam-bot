@@ -10,7 +10,7 @@ import path from "path";
 import { getBeijingDate, getBeijingDateTime } from "./utils/date";
 
 // 必须打电话的日期
-const mustCallPhoneDates = ["2026/1/8"];
+const mustCallPhoneDates = ["2026/1/8", "2026/4/2"];
 
 const filePath = path.join(process.cwd(), "sent.json");
 
@@ -50,7 +50,7 @@ async function saveHTMLFiles() {
         value: "schinese",
         domain: "steamcommunity.com",
         path: "/",
-      }
+      },
     );
 
     console.log(`➡️ 第 ${count} 次访问起始页面...`);
@@ -118,7 +118,7 @@ async function saveHTMLFiles() {
           if (!exists) {
             const markdown = transformHtmlToMd(html);
             const shouldCallPhone = mustCallPhoneDates.includes(
-              getBeijingDate()
+              getBeijingDate(),
             )
               ? true
               : await judgeNotice(markdown);
@@ -142,7 +142,7 @@ async function saveHTMLFiles() {
         } catch (error) {
           console.error("❌ 链接处理失败：", error);
         }
-      })
+      }),
     );
 
     if (shouldSaveLinks.length) {
