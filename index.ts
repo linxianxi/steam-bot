@@ -28,6 +28,8 @@ async function saveHTMLFiles() {
   // 是否打过电话
   let phoneCalled = false;
 
+  console.log("北京时间", getBeijingDate(), getBeijingDateTime());
+
   async function main(count: number) {
     const page = await browser.newPage();
 
