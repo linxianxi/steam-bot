@@ -9,8 +9,8 @@ import fs from "fs";
 import path from "path";
 import { getBeijingDate, getBeijingDateTime } from "./utils/date";
 
-// 必须打电话的日期
-const mustCallPhoneDates = ["2026/1/8", "2026/4/2"];
+// 必须打电话的日期，月/日/年
+const mustCallPhoneDates = ["1/8/2026", "4/2/2026"];
 
 const filePath = path.join(process.cwd(), "sent.json");
 
@@ -27,8 +27,6 @@ async function saveHTMLFiles() {
 
   // 是否打过电话
   let phoneCalled = false;
-
-  console.log("北京时间", getBeijingDate(), getBeijingDateTime());
 
   async function main(count: number) {
     const page = await browser.newPage();
