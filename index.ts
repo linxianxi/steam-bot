@@ -10,7 +10,7 @@ import path from "path";
 import { getBeijingDate, getBeijingDateTime } from "./utils/date";
 
 // 必须打电话的日期，月/日/年
-const mustCallPhoneDates = ["1/8/2026", "4/2/2026"];
+const mustCallPhoneDates = ["1/8/2026", "4/2/2026", "4/8/2026"];
 
 const filePath = path.join(process.cwd(), "sent.json");
 
