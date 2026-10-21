@@ -12,7 +12,7 @@ export async function judgeNotice(content: string) {
           Authorization: `Bearer ${aiToken}`,
         },
         body: JSON.stringify({
-          model: "gpt-5-mini",
+          model: "gpt-4o",
           messages: [
             {
               role: "system",

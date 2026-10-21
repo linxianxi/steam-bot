@@ -14,7 +14,7 @@ export async function translator(content: string) {
           Authorization: `Bearer ${aiToken}`,
         },
         body: JSON.stringify({
-          model: "gpt-5-mini",
+          model: "gpt-4o",
           messages: [
             {
               role: "system",
@@ -31,7 +31,7 @@ export async function translator(content: string) {
           ],
           temperature: 0,
         }),
-      }
+      },
     );
 
     const response = await res.json();
